@@ -237,7 +237,7 @@ code change.
 
 ## Submission notes
 
-- **Conversation export** — generate with:
+- **Conversation export** — `docs/conversation.json` (471 messages). Regenerate with:
 
   ```bash
   python3 tools/export_conversation.py \
