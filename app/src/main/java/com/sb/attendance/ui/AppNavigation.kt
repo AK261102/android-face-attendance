@@ -2,10 +2,10 @@ package com.sb.attendance.ui
 
 import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -113,8 +113,16 @@ fun AppNavigation() {
         }
 
         composable(Routes.MARK_ATTENDANCE) {
-            val staffSession = session as? Session.Staff ?: return@composable
-            MarkAttendanceScreen(session = staffSession, onLogout = logout)
+            // After process death the nav back stack is restored but `session` is not, so
+            // fall back to Login rather than rendering a blank screen.
+            when (val staffSession = session) {
+                is Session.Staff -> MarkAttendanceScreen(session = staffSession, onLogout = logout)
+                else -> LaunchedEffect(Unit) {
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                    }
+                }
+            }
         }
     }
 }
