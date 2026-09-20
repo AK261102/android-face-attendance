@@ -114,11 +114,23 @@ fun FrontCameraPreview(
 /**
  * JPEG bytes from CameraX arrive in sensor orientation. Rotate them upright and flip
  * horizontally so the saved selfie matches what the user saw in the preview.
+ *
+ * The frame is downsampled to at most [MAX_EDGE_PX] on its long edge first. A 12MP sensor
+ * decodes to ~48MB as ARGB_8888, and the rotate below allocates a second bitmap of the same
+ * size, which is enough to OOM a mid-range device. Recognition only ever consumes a 160x160
+ * crop, so full resolution buys the face pipeline nothing and only bloats the stored selfie.
  */
 private fun ImageProxy.toUprightBitmap(): Bitmap {
     val buffer = planes[0].buffer
     val bytes = ByteArray(buffer.remaining()).also { buffer.get(it) }
-    val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+
+    val options = BitmapFactory.Options().apply {
+        inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight)
+    }
+    val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
         ?: error("Could not decode captured frame")
 
     val matrix = Matrix().apply {
@@ -129,3 +141,17 @@ private fun ImageProxy.toUprightBitmap(): Bitmap {
     if (upright !== decoded) decoded.recycle()
     return upright
 }
+
+/** Smallest power-of-two subsample that brings the long edge under [MAX_EDGE_PX]. */
+private fun sampleSizeFor(width: Int, height: Int): Int {
+    var sample = 1
+    var longEdge = maxOf(width, height)
+    while (longEdge / 2 >= MAX_EDGE_PX) {
+        longEdge /= 2
+        sample *= 2
+    }
+    return sample
+}
+
+/** Plenty for a stored selfie, and far more than the 160x160 the model consumes. */
+private const val MAX_EDGE_PX = 1440

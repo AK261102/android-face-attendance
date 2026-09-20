@@ -12,11 +12,16 @@ object FaceMatcher {
     /**
      * Minimum cosine similarity for two embeddings to be accepted as the same person.
      *
-     * Tuned conservatively: FaceNet embeddings of the same face under different lighting
-     * typically land around 0.75-0.95, different people around 0.0-0.45. 0.65 leaves a
-     * margin on both sides. Raise it to make the check stricter.
+     * Measured against this exact model and preprocessing (see tools/validate_embeddings.py):
+     * two photos of the same person taken years apart, with different pose, expression and
+     * lighting, scored 0.74; two different people scored 0.02 and -0.00.
+     *
+     * 0.60 therefore sits far above the different-person cluster (~30x it) while leaving
+     * headroom below the hardest same-person pair measured. In the app's actual flow the
+     * enrolment shots and the attendance selfie are minutes apart in the same lighting, so
+     * genuine matches score higher than that 0.74 worst case. Raise it to be stricter.
      */
-    const val MATCH_THRESHOLD = 0.65f
+    const val MATCH_THRESHOLD = 0.60f
 
     /** Both vectors are expected to be L2-normalised, so this is a plain dot product. */
     fun cosineSimilarity(a: FloatArray, b: FloatArray): Float {
