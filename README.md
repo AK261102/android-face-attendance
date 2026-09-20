@@ -48,8 +48,15 @@ face matches every other face, and the app silently records attendance for the w
 Unit-testing the cosine arithmetic does not catch this, because that arithmetic is correct
 either way.
 
-So the pipeline was measured directly against real photos (`tools/validate_embeddings.py`):
-two photos of the same person taken years apart, and one of a different person.
+So the pipeline is measured directly against real photos — two of the same person taken years
+apart, and one of a different person — in two places:
+
+- **`app/src/androidTest/.../FaceEmbedderInstrumentedTest.kt`** runs the real model on a device
+  through the actual Kotlin `FaceEmbedder`, and asserts that the same person clears the
+  threshold, that different people fall well below it, and that the embedding space has not
+  collapsed. **5/5 passing** on an API 34 emulator.
+- **`tools/validate_embeddings.py`** does the same comparison in Python, and was used to choose
+  the threshold by sweeping the three plausible preprocessing conventions:
 
 | preprocessing | same person | different people | gap |
 |---|---|---|---|
@@ -80,7 +87,7 @@ app/src/main/java/com/sb/attendance/
 
 `FaceMatcher` is deliberately free of Android dependencies so the matching rule is unit tested
 on the JVM (`app/src/test/.../FaceMatcherTest.kt`, 6 tests). Those cover the decision rule;
-the model itself is validated separately — see below.
+the model itself is covered by an on-device test — see below.
 
 ---
 
@@ -129,9 +136,10 @@ emulator on API 24+.
 ```bash
 git clone <this-repo>
 cd android-face-attendance
-./gradlew assembleDebug            # APK at app/build/outputs/apk/debug/app-debug.apk
-./gradlew testDebugUnitTest        # matching-logic unit tests
-./gradlew installDebug             # install onto a connected device
+./gradlew assembleDebug              # APK at app/build/outputs/apk/debug/app-debug.apk
+./gradlew testDebugUnitTest          # matching-logic unit tests (JVM)
+./gradlew connectedDebugAndroidTest  # on-device face-recognition tests (needs a device/emulator)
+./gradlew installDebug               # install onto a connected device
 ```
 
 Or open the project in Android Studio and press Run.
@@ -149,6 +157,26 @@ Android Studio → Device Manager → Edit AVD → Advanced → Front Camera →
 ```
 
 ---
+
+## What was verified
+
+Run on an API 34 arm64 emulator (Pixel 6 profile):
+
+| Check | Result |
+|---|---|
+| App launches, no crash | MainActivity displayed |
+| Login (admin) -> Staff List | works |
+| Add staff -> Room insert -> profile | works, row survives app reinstall and emulator reboot |
+| Enrolment screen binds the **front** camera | CameraX preview live, capture button enabled |
+| Capture -> ML Kit detection -> rejection path | "No face detected", counter correctly stays at 0/3 |
+| FaceNet model loads from assets on-device | 160x160 in, 512-d out |
+| Same person vs different people | separated; 5/5 instrumented tests pass |
+| Unit tests (matching rule) | 6/6 pass |
+
+**Not verified end to end:** a real enrol -> match on a live human face. An emulator's front
+camera renders a synthetic scene, so ML Kit correctly finds no face in it. The recognition
+maths is covered instead by the on-device test above, which feeds real face images through the
+real model. Running the app on a physical device is the remaining step.
 
 ## Assumptions & limitations
 
